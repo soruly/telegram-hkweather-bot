@@ -1,0 +1,3 @@
+bottoken: 123456789:XXXXXXXXXXXXXXXXXXX
+webhookurl: https://your.base.url.here
+webhookpath: /RelativeURLPath
