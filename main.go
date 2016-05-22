@@ -9,6 +9,9 @@ import (
   "github.com/ungerik/go-rss"
   "gopkg.in/yaml.v2"
   "io/ioutil"
+  "database/sql"
+  "fmt"
+  _ "github.com/go-sql-driver/mysql"
 )
 
 type Config struct {
@@ -16,12 +19,15 @@ type Config struct {
     WebHookPath string
     WebHookURL string
     Listen string
+    SQLConfig string
 }
 
-func getCurrent() string {
+func fetchCurrent() {
   channel, _ := rss.Read("http://rss.weather.gov.hk/rss/CurrentWeather.xml")
   feedText := ""
+  var pubDate rss.Date
   for _, item := range channel.Item {
+    pubDate = item.PubDate
     feedText = item.Description
   }
   regexr := regexp.MustCompile(`(?s)<p>.*?</p>`)
@@ -34,28 +40,64 @@ func getCurrent() string {
   feedText = regexr.ReplaceAllString(feedText,"")
   regexr = regexp.MustCompile(`  `)
   feedText = regexr.ReplaceAllString(feedText,"")
-  return feedText
+  
+  stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
+    VALUES( ?, ?, ?, ? ) ON DUPLICATE KEY UPDATE pubdate=VALUES(pubdate), content=VALUES(content)`)
+
+  if err != nil {
+    panic(err.Error())
+  }
+  defer stmtIns.Close()
+  _, err = stmtIns.Exec("current", "eng", fmt.Sprintf("%v",pubDate), feedText)
+  if err != nil {
+    panic(err.Error())
+  }
+  log.Println("Updated current RSS feed")
 }
 
-func getWarning() string {
+func fetchWarning() {
   channel, _ := rss.Read("http://rss.weather.gov.hk/rss/WeatherWarningSummaryv2.xml")
   feedText := ""
+  var pubDate rss.Date
   for _, item := range channel.Item {
+    pubDate = item.PubDate
     feedText = item.Title
   }
-  return feedText
+  
+  stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
+    VALUES( ?, ?, ?, ? ) ON DUPLICATE KEY UPDATE pubdate=VALUES(pubdate), content=VALUES(content)`)
+
+  if err != nil {
+    panic(err.Error())
+  }
+  defer stmtIns.Close()
+  _, err = stmtIns.Exec("warning", "eng", fmt.Sprintf("%v",pubDate), feedText)
+  if err != nil {
+    panic(err.Error())
+  }
+  log.Println("Updated warning RSS feed")
+}
+
+func getTopic(topic string) string {
+  var content string
+  err := db.QueryRow("SELECT content FROM feed WHERE topic=? AND language=?", topic, "eng").Scan(&content)
+  if err != nil {
+    log.Fatal(err)
+  }
+  log.Println(content)
+  return content
 }
 
 func tellmeHandler(topic string) string {
   switch topic {
-    case "current":
-      return getCurrent()
-    case "warning":
-      return getWarning()
+    case "current", "warning":
+      return getTopic(topic)
     default:
       return "Supported topics: *current*, *warning*"
   }
 }
+
+var db *sql.DB
 
 func main() {
   var config Config
@@ -67,6 +109,15 @@ func main() {
   if err != nil {
       panic(err)
   }
+
+  db, err = sql.Open("mysql", config.SQLConfig)
+  if err != nil {
+    panic(err.Error())
+  }
+  defer db.Close()
+
+  fetchCurrent()
+  fetchWarning()
 
   bot, err := tgbotapi.NewBotAPI(config.BotToken)
   if err != nil {
