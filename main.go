@@ -23,7 +23,7 @@ type Config struct {
     SQLConfig string
 }
 
-func fetchCurrent(language string) {
+func fetchCurrent(language string) (string, string) {
   url := ""
   switch language {
     case "eng":
@@ -35,11 +35,12 @@ func fetchCurrent(language string) {
   }
   channel, _ := rss.Read(url)
   feedText := ""
-  var pubDate rss.Date
+  var rssDate rss.Date
   for _, item := range channel.Item {
-    pubDate = item.PubDate
+    rssDate = item.PubDate
     feedText = item.Description
   }
+  pubDate := fmt.Sprintf("%v",rssDate)
   regexr := regexp.MustCompile(`(?s)<p>.*?</p>`)
   feedText = regexr.FindString(feedText)
   regexr = regexp.MustCompile(`[\t\r\n]`)
@@ -65,14 +66,16 @@ func fetchCurrent(language string) {
     panic(err.Error())
   }
   defer stmtIns.Close()
-  _, err = stmtIns.Exec("current", language, fmt.Sprintf("%v",pubDate), feedText)
+  _, err = stmtIns.Exec("current", language, pubDate, feedText)
   if err != nil {
     panic(err.Error())
   }
   log.Println("Updated "+language+" current RSS feed")
+
+  return pubDate, feedText
 }
 
-func fetchWarning(language string) {
+func fetchWarning(language string) (string, string) {
   url := ""
   switch language {
     case "eng":
@@ -84,11 +87,12 @@ func fetchWarning(language string) {
   }
   channel, _ := rss.Read(url)
   feedText := ""
-  var pubDate rss.Date
+  var rssDate rss.Date
   for _, item := range channel.Item {
-    pubDate = item.PubDate
-    feedText = item.Title
+    rssDate = item.PubDate
+    feedText = item.Description
   }
+  pubDate := fmt.Sprintf("%v",rssDate)
   
   stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
     VALUES( ?, ?, ?, ? ) ON DUPLICATE KEY UPDATE pubdate=VALUES(pubdate), content=VALUES(content)`)
@@ -97,11 +101,13 @@ func fetchWarning(language string) {
     panic(err.Error())
   }
   defer stmtIns.Close()
-  _, err = stmtIns.Exec("warning", language, fmt.Sprintf("%v",pubDate), feedText)
+  _, err = stmtIns.Exec("warning", language, pubDate, feedText)
   if err != nil {
     panic(err.Error())
   }
   log.Println("Updated "+language+" warning RSS feed")
+
+  return pubDate, feedText
 }
 
 func getTopic(topic string) string {
@@ -122,6 +128,43 @@ func tellmeHandler(topic string) string {
   }
 }
 
+func subscribeHandler(userID int, topic string) string {
+  switch topic {
+    case "current", "warning":
+        stmtIns, err := db.Prepare(`INSERT INTO subscribe (id, topic)
+          VALUES( ?, ? ) ON DUPLICATE KEY UPDATE topic=VALUES(topic)`)
+        if err != nil {
+          panic(err.Error())
+        }
+        defer stmtIns.Close()
+        _, err = stmtIns.Exec(userID, topic)
+        if err != nil {
+          panic(err.Error())
+        }
+      return "You have subscribed "+ topic
+    default:
+      return "Supported topics: *current*, *warning*"
+  }
+}
+
+func unsubscribeHandler(userID int, topic string) string {
+  switch topic {
+    case "current", "warning":
+        stmtIns, err := db.Prepare(`DELETE FROM subscribe WHERE id=? AND topic=?`)
+        if err != nil {
+          panic(err.Error())
+        }
+        defer stmtIns.Close()
+        _, err = stmtIns.Exec(userID, topic)
+        if err != nil {
+          panic(err.Error())
+        }
+      return "You have unsubscribed "+ topic
+    default:
+      return "Supported topics: *current*, *warning*"
+  }
+}
+
 func setUILanguage(userID int, language string) {
   stmtIns, err := db.Prepare(`INSERT INTO user (id, language)
     VALUES( ?, ? ) ON DUPLICATE KEY UPDATE language=VALUES(language)`)
@@ -135,8 +178,6 @@ func setUILanguage(userID int, language string) {
     panic(err.Error())
   }
 }
-
-
 
 func getUILanguage(userID int) string {
   var content string
@@ -226,6 +267,10 @@ func main() {
         responseText = "What do you want me to tell?\nSupported topics: *current*, *warning*"
       case args[0] == "tellme":
         responseText = tellmeHandler(args[1])
+      case args[0] == "subscribe":
+        responseText = subscribeHandler(update.Message.From.ID, args[1])
+      case args[0] == "unsubscribe":
+        responseText = unsubscribeHandler(update.Message.From.ID, args[1])
       case args[0] == "English":
         language = "eng"
         setUILanguage(update.Message.From.ID, language)
@@ -239,7 +284,7 @@ func main() {
         setUILanguage(update.Message.From.ID, language)
         responseText = "Setting UI language to 简体中文"
       default:
-        responseText = "I understand these commands: `topics`, `tellme`, `English`, `繁體中文`, `简体中文`"
+        responseText = "I understand these commands: `topics`, `tellme`, `subscribe`, `unsubscribe`, `English`, `繁體中文`, `简体中文`"
     }
 
     msg := tgbotapi.NewMessage(update.Message.Chat.ID, responseText)
