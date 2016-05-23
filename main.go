@@ -4,6 +4,7 @@ import (
   "strings"
   "gopkg.in/telegram-bot-api.v4"
   "log"
+  "time"
   "net/http"
   "regexp"
   "github.com/ungerik/go-rss"
@@ -135,6 +136,8 @@ func setUILanguage(userID int, language string) {
   }
 }
 
+
+
 func getUILanguage(userID int) string {
   var content string
   err := db.QueryRow("SELECT language FROM user WHERE id=?", userID).Scan(&content)
@@ -142,6 +145,24 @@ func getUILanguage(userID int) string {
     return ""
   }
   return content
+}
+
+func listenCurrent() {
+  for {
+    fetchCurrent("eng")
+    fetchCurrent("cht")
+    fetchCurrent("chs")
+    time.Sleep(300 * time.Second)
+  }
+}
+
+func listenWarning() {
+  for {
+    fetchWarning("eng")
+    fetchWarning("cht")
+    fetchWarning("chs")
+    time.Sleep(60 * time.Second)
+  }
 }
 
 var db *sql.DB
@@ -163,12 +184,8 @@ func main() {
   }
   defer db.Close()
 
-  fetchCurrent("eng")
-  fetchCurrent("cht")
-  fetchCurrent("chs")
-  fetchWarning("eng")
-  fetchWarning("cht")
-  fetchWarning("chs")
+  go listenCurrent()
+  go listenWarning()
 
   bot, err := tgbotapi.NewBotAPI(config.BotToken)
   if err != nil {
