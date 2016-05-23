@@ -16,14 +16,6 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Current Database: `telegram`
---
-
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `telegram` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */;
-
-USE `telegram`;
-
---
 -- Table structure for table `feed`
 --
 
@@ -32,10 +24,24 @@ DROP TABLE IF EXISTS `feed`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `feed` (
   `topic` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `language` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `language` enum('eng','cht','chs') COLLATE utf8mb4_unicode_ci NOT NULL,
   `pubdate` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`topic`,`language`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `user`
+--
+
+DROP TABLE IF EXISTS `user`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `user` (
+  `id` int(11) NOT NULL,
+  `language` enum('eng','cht','chs') COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -48,4 +54,4 @@ CREATE TABLE `feed` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2016-05-23  2:49:44
+-- Dump completed on 2016-05-23 23:48:55

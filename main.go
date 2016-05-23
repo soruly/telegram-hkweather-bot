@@ -109,7 +109,6 @@ func getTopic(topic string) string {
   if err != nil {
     log.Fatal(err)
   }
-  log.Println(content)
   return content
 }
 
@@ -120,6 +119,29 @@ func tellmeHandler(topic string) string {
     default:
       return "Supported topics: *current*, *warning*"
   }
+}
+
+func setUILanguage(userID int, language string) {
+  stmtIns, err := db.Prepare(`INSERT INTO user (id, language)
+    VALUES( ?, ? ) ON DUPLICATE KEY UPDATE language=VALUES(language)`)
+
+  if err != nil {
+    panic(err.Error())
+  }
+  defer stmtIns.Close()
+  _, err = stmtIns.Exec(userID, language)
+  if err != nil {
+    panic(err.Error())
+  }
+}
+
+func getUILanguage(userID int) string {
+  var content string
+  err := db.QueryRow("SELECT language FROM user WHERE id=?", userID).Scan(&content)
+  if err != nil {
+    return ""
+  }
+  return content
 }
 
 var db *sql.DB
@@ -168,8 +190,18 @@ func main() {
   for update := range updates {
     log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
+    language := getUILanguage(update.Message.From.ID)
+    if(language == ""){
+      log.Println("Setting default language to eng")
+      language = "eng"
+      setUILanguage(update.Message.From.ID, language)
+    }
+    log.Println("Setting UI language to "+language)
+    
     responseText := ""
     args := strings.Split(update.Message.Text, " ")
+
+
     switch {
       case args[0] == "topics":
         responseText = "Supported topics: *current*, *warning*"
@@ -177,8 +209,20 @@ func main() {
         responseText = "What do you want me to tell?\nSupported topics: *current*, *warning*"
       case args[0] == "tellme":
         responseText = tellmeHandler(args[1])
+      case args[0] == "English":
+        language = "eng"
+        setUILanguage(update.Message.From.ID, language)
+        responseText = "Setting UI language to English"
+      case args[0] == "繁體中文":
+        language = "cht"
+        setUILanguage(update.Message.From.ID, language)
+        responseText = "Setting UI language to 繁體中文"
+      case args[0] == "简体中文":
+        language = "chs"
+        setUILanguage(update.Message.From.ID, language)
+        responseText = "Setting UI language to 简体中文"
       default:
-        responseText = "I understand these commands: `topics`, `tellme`"
+        responseText = "I understand these commands: `topics`, `tellme`, `English`, `繁體中文`, `简体中文`"
     }
 
     msg := tgbotapi.NewMessage(update.Message.Chat.ID, responseText)
