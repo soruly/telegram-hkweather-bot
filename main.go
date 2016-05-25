@@ -177,8 +177,8 @@ func listenFeed(topic string, language string) {
   for {
     _, content := fetchTopic(topic, language)
     if(content != temp){
-      temp = content
       log.Printf("changed prev: %s now: %s", temp, content)
+      temp = content
     }
     time.Sleep(300 * time.Second)
   }
