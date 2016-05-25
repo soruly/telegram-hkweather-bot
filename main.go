@@ -23,15 +23,28 @@ type Config struct {
     SQLConfig string
 }
 
-func fetchCurrent(language string) (string, string) {
+func fetchTopic(topic string, language string) (string, string) {
   url := ""
-  switch language {
-    case "eng":
-      url = "http://rss.weather.gov.hk/rss/CurrentWeather.xml"
-    case "cht":
-      url = "http://rss.weather.gov.hk/rss/CurrentWeather_uc.xml"
-    case "chs":
-      url = "http://gbrss.weather.gov.hk/rss/CurrentWeather_uc.xml"
+  switch topic {
+    case "current": 
+      switch language {
+        case "eng":
+          url = "http://rss.weather.gov.hk/rss/CurrentWeather.xml"
+        case "cht":
+          url = "http://rss.weather.gov.hk/rss/CurrentWeather_uc.xml"
+        case "chs":
+          url = "http://gbrss.weather.gov.hk/rss/CurrentWeather_uc.xml"
+      }
+    case "warning": 
+      switch language {
+        case "eng":
+          url = "http://rss.weather.gov.hk/rss/WeatherWarningSummaryv2.xml"
+        case "cht":
+          url = "http://rss.weather.gov.hk/rss/WeatherWarningSummaryv2_uc.xml"
+        case "chs":
+          url = "http://gbrss.weather.gov.hk/rss/WeatherWarningSummaryv2_uc.xml"
+      }
+    
   }
   channel, _ := rss.Read(url)
   feedText := ""
@@ -41,22 +54,25 @@ func fetchCurrent(language string) (string, string) {
     feedText = item.Description
   }
   pubDate := fmt.Sprintf("%v",rssDate)
-  regexr := regexp.MustCompile(`(?s)<p>.*?</p>`)
-  feedText = regexr.FindString(feedText)
-  regexr = regexp.MustCompile(`[\t\r\n]`)
-  feedText = regexr.ReplaceAllString(feedText,"")
-  regexr = regexp.MustCompile(`<br/>`)
-  feedText = regexr.ReplaceAllString(feedText,"\n")
-  regexr = regexp.MustCompile(`<[^<]*>`)
-  feedText = regexr.ReplaceAllString(feedText,"")
-  regexr = regexp.MustCompile(`  `)
-  feedText = regexr.ReplaceAllString(feedText,"")
-  if(language != "eng"){
-    regexr = regexp.MustCompile(` `)
+
+  if(topic == "current"){
+    regexr := regexp.MustCompile(`(?s)<p>.*?</p>`)
+    feedText = regexr.FindString(feedText)
+    regexr = regexp.MustCompile(`[\t\r\n]`)
+    feedText = regexr.ReplaceAllString(feedText,"")
+    regexr = regexp.MustCompile(`<br/>`)
+    feedText = regexr.ReplaceAllString(feedText,"\n")
+    regexr = regexp.MustCompile(`<[^<]*>`)
+    feedText = regexr.ReplaceAllString(feedText,"")
+    regexr = regexp.MustCompile(`  `)
+    feedText = regexr.ReplaceAllString(feedText,"")
+    if(language != "eng"){
+      regexr = regexp.MustCompile(` `)
+      feedText = regexr.ReplaceAllString(feedText,"")
+    }
+    regexr = regexp.MustCompile("\n\n+")
     feedText = regexr.ReplaceAllString(feedText,"")
   }
-  regexr = regexp.MustCompile("\n\n+")
-  feedText = regexr.ReplaceAllString(feedText,"")
   feedText = strings.TrimSpace(feedText)
   
   stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
@@ -66,49 +82,15 @@ func fetchCurrent(language string) (string, string) {
     panic(err.Error())
   }
   defer stmtIns.Close()
-  _, err = stmtIns.Exec("current", language, pubDate, feedText)
+  _, err = stmtIns.Exec(topic, language, pubDate, feedText)
   if err != nil {
     panic(err.Error())
   }
-  log.Println("Updated "+language+" current RSS feed")
+  log.Println("Updated "+language+" "+ topic +" RSS feed")
 
   return pubDate, feedText
 }
 
-func fetchWarning(language string) (string, string) {
-  url := ""
-  switch language {
-    case "eng":
-      url = "http://rss.weather.gov.hk/rss/WeatherWarningSummaryv2.xml"
-    case "cht":
-      url = "http://rss.weather.gov.hk/rss/WeatherWarningSummaryv2_uc.xml"
-    case "chs":
-      url = "http://gbrss.weather.gov.hk/rss/WeatherWarningSummaryv2_uc.xml"
-  }
-  channel, _ := rss.Read(url)
-  feedText := ""
-  var rssDate rss.Date
-  for _, item := range channel.Item {
-    rssDate = item.PubDate
-    feedText = item.Description
-  }
-  pubDate := fmt.Sprintf("%v",rssDate)
-  
-  stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
-    VALUES( ?, ?, ?, ? ) ON DUPLICATE KEY UPDATE pubdate=VALUES(pubdate), content=VALUES(content)`)
-
-  if err != nil {
-    panic(err.Error())
-  }
-  defer stmtIns.Close()
-  _, err = stmtIns.Exec("warning", language, pubDate, feedText)
-  if err != nil {
-    panic(err.Error())
-  }
-  log.Println("Updated "+language+" warning RSS feed")
-
-  return pubDate, feedText
-}
 
 func getTopic(topic string, language string) string {
   var content string
@@ -188,21 +170,17 @@ func getUILanguage(userID int) string {
   return content
 }
 
-func listenCurrent() {
+func listenFeed(topic string, language string) {
+  //load the previous feed from database in case server restarted
+  temp := getTopic(topic, language)
+  
   for {
-    fetchCurrent("eng")
-    fetchCurrent("cht")
-    fetchCurrent("chs")
+    _, content := fetchTopic(topic, language)
+    if(content != temp){
+      temp = content
+      log.Printf("changed prev: %s now: %s", temp, content)
+    }
     time.Sleep(300 * time.Second)
-  }
-}
-
-func listenWarning() {
-  for {
-    fetchWarning("eng")
-    fetchWarning("cht")
-    fetchWarning("chs")
-    time.Sleep(60 * time.Second)
   }
 }
 
@@ -225,8 +203,12 @@ func main() {
   }
   defer db.Close()
 
-  go listenCurrent()
-  go listenWarning()
+  go listenFeed("current", "eng")
+  go listenFeed("current", "cht")
+  go listenFeed("current", "chs")
+  go listenFeed("warning", "eng")
+  go listenFeed("warning", "cht")
+  go listenFeed("warning", "chs")
 
   bot, err := tgbotapi.NewBotAPI(config.BotToken)
   if err != nil {
