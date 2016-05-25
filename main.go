@@ -12,6 +12,7 @@ import (
   "io/ioutil"
   "database/sql"
   "fmt"
+  "strconv"
   _ "github.com/go-sql-driver/mysql"
 )
 
@@ -147,6 +148,50 @@ func unsubscribeHandler(userID int, topic string, language string) string {
   }
 }
 
+func notifyUsers(topic string, language string, content string){
+  rows, err := db.Query("SELECT `user`.`id` FROM `subscribe` LEFT JOIN user ON `user`.`id`=`subscribe`.`id` WHERE `subscribe`.`topic`='"+topic+"' AND `user`.`language`='"+language+"'")
+  if err != nil {
+    panic(err.Error())
+  }
+
+  columns, err := rows.Columns()
+  if err != nil {
+    panic(err.Error())
+  }
+
+  values := make([]sql.RawBytes, len(columns))
+
+  scanArgs := make([]interface{}, len(values))
+  for i := range values {
+      scanArgs[i] = &values[i]
+  }
+
+  for rows.Next() {
+    err = rows.Scan(scanArgs...)
+    if err != nil {
+        panic(err.Error())
+    }
+
+    var value string
+    for i, col := range values {
+        if col == nil {
+            value = "NULL"
+        } else {
+            value = string(col)
+        }
+        //fmt.Println(columns[i], ": ", value)
+        userID, _ := strconv.ParseInt(value, 10, 64)
+        msg := tgbotapi.NewMessage(userID, content)
+        msg.ParseMode = "Markdown"
+        fmt.Printf("Notify userID %d that %s of language %s has updated", userID, topic, language)
+        bot.Send(msg)
+    }
+  }
+  if err = rows.Err(); err != nil {
+    panic(err.Error())
+  }  
+}
+
 func setUILanguage(userID int, language string) {
   stmtIns, err := db.Prepare(`INSERT INTO user (id, language)
     VALUES( ?, ? ) ON DUPLICATE KEY UPDATE language=VALUES(language)`)
@@ -178,6 +223,7 @@ func listenFeed(topic string, language string) {
     _, content := fetchTopic(topic, language)
     if(content != temp){
       log.Printf("changed prev: %s now: %s", temp, content)
+      notifyUsers(topic, language, content)
       temp = content
     }
     time.Sleep(300 * time.Second)
@@ -185,6 +231,8 @@ func listenFeed(topic string, language string) {
 }
 
 var db *sql.DB
+var bot *tgbotapi.BotAPI
+var err error
 
 func main() {
   var config Config
@@ -203,14 +251,7 @@ func main() {
   }
   defer db.Close()
 
-  go listenFeed("current", "eng")
-  go listenFeed("current", "cht")
-  go listenFeed("current", "chs")
-  go listenFeed("warning", "eng")
-  go listenFeed("warning", "cht")
-  go listenFeed("warning", "chs")
-
-  bot, err := tgbotapi.NewBotAPI(config.BotToken)
+  bot, err = tgbotapi.NewBotAPI(config.BotToken)
   if err != nil {
     log.Fatal(err)
   }
@@ -223,6 +264,13 @@ func main() {
   if err != nil {
     log.Fatal(err)
   }
+
+  go listenFeed("current", "eng")
+  go listenFeed("current", "cht")
+  go listenFeed("current", "chs")
+  go listenFeed("warning", "eng")
+  go listenFeed("warning", "cht")
+  go listenFeed("warning", "chs")
 
   updates := bot.ListenForWebhook(config.WebHookPath+"/"+config.BotToken)
   go http.ListenAndServe(config.Listen, nil)
