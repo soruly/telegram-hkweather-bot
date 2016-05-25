@@ -110,25 +110,25 @@ func fetchWarning(language string) (string, string) {
   return pubDate, feedText
 }
 
-func getTopic(topic string) string {
+func getTopic(topic string, language string) string {
   var content string
-  err := db.QueryRow("SELECT content FROM feed WHERE topic=? AND language=?", topic, "eng").Scan(&content)
+  err := db.QueryRow("SELECT content FROM feed WHERE topic=? AND language=?", topic, language).Scan(&content)
   if err != nil {
     log.Fatal(err)
   }
   return content
 }
 
-func tellmeHandler(topic string) string {
+func tellmeHandler(topic string, language string) string {
   switch topic {
     case "current", "warning":
-      return getTopic(topic)
+      return getTopic(topic, language)
     default:
       return "Supported topics: *current*, *warning*"
   }
 }
 
-func subscribeHandler(userID int, topic string) string {
+func subscribeHandler(userID int, topic string, language string) string {
   switch topic {
     case "current", "warning":
         stmtIns, err := db.Prepare(`INSERT INTO subscribe (id, topic)
@@ -147,7 +147,7 @@ func subscribeHandler(userID int, topic string) string {
   }
 }
 
-func unsubscribeHandler(userID int, topic string) string {
+func unsubscribeHandler(userID int, topic string, language string) string {
   switch topic {
     case "current", "warning":
         stmtIns, err := db.Prepare(`DELETE FROM subscribe WHERE id=? AND topic=?`)
@@ -266,11 +266,11 @@ func main() {
       case args[0] == "tellme" && len(args) <= 1:
         responseText = "What do you want me to tell?\nSupported topics: *current*, *warning*"
       case args[0] == "tellme":
-        responseText = tellmeHandler(args[1])
+        responseText = tellmeHandler(args[1], language)
       case args[0] == "subscribe":
-        responseText = subscribeHandler(update.Message.From.ID, args[1])
+        responseText = subscribeHandler(update.Message.From.ID, args[1], language)
       case args[0] == "unsubscribe":
-        responseText = unsubscribeHandler(update.Message.From.ID, args[1])
+        responseText = unsubscribeHandler(update.Message.From.ID, args[1], language)
       case args[0] == "English":
         language = "eng"
         setUILanguage(update.Message.From.ID, language)
