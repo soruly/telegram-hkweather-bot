@@ -81,18 +81,7 @@ func fetchTopic(topic string, language string) (string, string) {
   }
   feedText = strings.TrimSpace(feedText)
   
-  stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
-    VALUES( ?, ?, ?, ? ) ON DUPLICATE KEY UPDATE pubdate=VALUES(pubdate), content=VALUES(content)`)
-
-  if err != nil {
-    panic(err.Error())
-  }
-  defer stmtIns.Close()
-  _, err = stmtIns.Exec(topic, language, pubDate, feedText)
-  if err != nil {
-    panic(err.Error())
-  }
-  log.Println("Updated "+language+" "+ topic +" RSS feed")
+  log.Printf("Fetched %s %s RSS feed", language, topic)
 
   return pubDate, feedText
 }
@@ -119,8 +108,7 @@ func tellmeHandler(topic string, language string) string {
 func subscribeHandler(userID int, topic string, language string) {
   switch topic {
     case "current", "warning":
-      stmtIns, err := db.Prepare(`INSERT INTO subscribe (id, topic)
-        VALUES( ?, ? ) ON DUPLICATE KEY UPDATE topic=VALUES(topic)`)
+      stmtIns, err := db.Prepare(`INSERT IGNORE INTO subscribe (id, topic) VALUES( ?, ? )`)
       if err != nil {
         panic(err.Error())
       }
@@ -164,7 +152,7 @@ func notifyUsers(topic string, language string, content string){
   for i := range values {
       scanArgs[i] = &values[i]
   }
-
+  
   for rows.Next() {
     err = rows.Scan(scanArgs...)
     if err != nil {
@@ -177,7 +165,7 @@ func notifyUsers(topic string, language string, content string){
             value = "NULL"
         } else {
           value = string(col)
-          fmt.Println(columns[i], ": ", value)
+          //fmt.Println(columns[i], ": ", value)
           userID, _ := strconv.ParseInt(value, 10, 64)
           msg := tgbotapi.NewMessage(userID, content)
           msg.ParseMode = "Markdown"
@@ -219,10 +207,24 @@ func listenFeed(topic string, language string, updateInterval int) {
   temp := getTopic(topic, language)
   
   for {
-    _, content := fetchTopic(topic, language)
-    if(content != temp){
-      //log.Printf("changed prev: %s now: %s", temp, content)
-      notifyUsers(topic, language, content)
+    pubDate, content := fetchTopic(topic, language)
+    if(content != temp){ //ignore RSS pubDate, just check if content changes
+      log.Printf("RSS feed of %s %s changed", language, topic)
+
+      stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
+        VALUES( ?, ?, ?, ? ) ON DUPLICATE KEY UPDATE pubdate=VALUES(pubdate), content=VALUES(content)`)
+      if err != nil {
+        panic(err.Error())
+      }
+      defer stmtIns.Close()
+      _, err = stmtIns.Exec(topic, language, pubDate, content)
+      if err != nil {
+        panic(err.Error())
+      }
+      log.Printf("Stored %s %s feed in database", language, topic)
+      
+      go notifyUsers(topic, language, content)
+
       temp = content
     }
     time.Sleep(time.Duration(updateInterval) * time.Second)
@@ -279,11 +281,9 @@ func main() {
 
     language := getUILanguage(update.Message.From.ID)
     if(language == ""){
-      log.Println("Setting default language to eng")
       language = "eng"
       setUILanguage(update.Message.From.ID, language)
     }
-    log.Println("Setting UI language to "+language)
     
     responseText := ""
     args := strings.Split(update.Message.Text, " ")
