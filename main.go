@@ -128,10 +128,25 @@ func subscribeHandler(userID int, topic string, language string) string {
         if err != nil {
           panic(err.Error())
         }
-      return "You have subscribed "+ topic
+      switch language {
+        case "eng":
+          return "You have subscribed "+ topic
+        case "cht":
+          return "你已訂閱了頻道 "+ topic
+        case "chs":
+          return "你已订阅了频道 "+ topic
+      }
     default:
-      return "Supported topics: *current*, *warning*"
+      switch language {
+        case "eng":
+          return "Please use `topic` to tell me what you want to subscribe"
+        case "cht":
+          return "請使用 `topic` 告訴我你想訂閱的頻道"
+        case "chs":
+          return "请使用 `topic` 告诉我你想订阅的频道"
+      }
   }
+  return ""
 }
 
 func unsubscribeHandler(userID int, topic string, language string) string {
@@ -146,10 +161,25 @@ func unsubscribeHandler(userID int, topic string, language string) string {
         if err != nil {
           panic(err.Error())
         }
-      return "You have unsubscribed "+ topic
+      switch language {
+        case "eng":
+          return "You have unsubscribed "+ topic
+        case "cht":
+          return "你已取消訂閱頻道 "+ topic
+        case "chs":
+          return "你已取消订阅频道 "+ topic
+      }
     default:
-      return "Supported topics: *current*, *warning*"
+      switch language {
+        case "eng":
+          return "Please use `topic` to tell me what you want to subscribe"
+        case "cht":
+          return "請使用 `topic` 告訴我你想取消訂閱的頻道"
+        case "chs":
+          return "请使用 `topic` 告诉我你想取消订阅的频道"
+      }
   }
+  return ""
 }
 
 func notifyUsers(topic string, language string, content string){
@@ -296,9 +326,23 @@ func main() {
 
     switch {
       case args[0] == "topics":
-        responseText = "Supported topics: *current*, *warning*"
+        switch language {
+          case "eng":
+            responseText = "Supported topics: *current*, *warning*"
+          case "cht":
+            responseText = "支援的資訊頻道: *current*, *warning*"
+          case "chs":
+            responseText = "支援的资讯频道: *current*, *warning*"
+        }
       case args[0] == "tellme" && len(args) <= 1:
-        responseText = "What do you want me to tell?\nSupported topics: *current*, *warning*"
+        switch language {
+          case "eng":
+            responseText = "Please use `topic` to tell me what do you want me to tell"
+          case "cht":
+            responseText = "請使用 `topic` 告訴我你想知道的資訊"
+          case "chs":
+            responseText = "请使用 `topic` 告诉我你想知道的资讯"
+        }
       case args[0] == "tellme":
         responseText = tellmeHandler(args[1], language)
       case args[0] == "subscribe":
@@ -312,13 +356,20 @@ func main() {
       case args[0] == "繁體中文":
         language = "cht"
         setUILanguage(update.Message.From.ID, language)
-        responseText = "Setting UI language to 繁體中文"
+        responseText = "語言設定為繁體中文"
       case args[0] == "简体中文":
         language = "chs"
         setUILanguage(update.Message.From.ID, language)
-        responseText = "Setting UI language to 简体中文"
+        responseText = "语言设定为简体中文"
       default:
-        responseText = "I understand these commands: `topics`, `tellme`, `subscribe`, `unsubscribe`, `English`, `繁體中文`, `简体中文`"
+        switch language {
+          case "eng":
+            responseText = "I understand these commands: `topics`, `tellme`, `subscribe`, `unsubscribe`, `English`, `繁體中文`, `简体中文`"
+          case "cht":
+            responseText = "支援的指令: `topics`, `tellme`, `subscribe`, `unsubscribe`, `English`, `繁體中文`, `简体中文`"
+          case "chs":
+            responseText = "支援的指令: `topics`, `tellme`, `subscribe`, `unsubscribe`, `English`, `繁體中文`, `简体中文`"
+        }
     }
 
     msg := tgbotapi.NewMessage(update.Message.Chat.ID, responseText)
