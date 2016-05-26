@@ -1,6 +1,6 @@
 ## telegram-hkweather-bot
 
-A telegram bot that tells the weather in Hong Kong. 
+A telegram bot that tells the weather of Hong Kong. 
 
 Weather information provided by [Hong Kong Observatory RSS](http://rss.weather.gov.hk/).
 
