@@ -74,6 +74,10 @@ func fetchTopic(topic string, language string) (string, string) {
     regexr = regexp.MustCompile("\n\n+")
     feedText = regexr.ReplaceAllString(feedText,"")
   }
+  if(topic == "warning"){
+    regexr := regexp.MustCompile(`<br/>`)
+    feedText = regexr.ReplaceAllString(feedText,"")
+  }
   feedText = strings.TrimSpace(feedText)
   
   stmtIns, err := db.Prepare(`INSERT INTO feed (topic, language, pubdate, content)
@@ -177,14 +181,14 @@ func notifyUsers(topic string, language string, content string){
         if col == nil {
             value = "NULL"
         } else {
-            value = string(col)
+          value = string(col)
+          fmt.Println(columns[i], ": ", value)
+          userID, _ := strconv.ParseInt(value, 10, 64)
+          msg := tgbotapi.NewMessage(userID, content)
+          msg.ParseMode = "Markdown"
+          fmt.Printf("Notify userID %d that %s of language %s has updated", userID, topic, language)
+          bot.Send(msg)
         }
-        //fmt.Println(columns[i], ": ", value)
-        userID, _ := strconv.ParseInt(value, 10, 64)
-        msg := tgbotapi.NewMessage(userID, content)
-        msg.ParseMode = "Markdown"
-        fmt.Printf("Notify userID %d that %s of language %s has updated", userID, topic, language)
-        bot.Send(msg)
     }
   }
   if err = rows.Err(); err != nil {
