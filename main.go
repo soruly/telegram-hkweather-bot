@@ -116,71 +116,35 @@ func tellmeHandler(topic string, language string) string {
   }
 }
 
-func subscribeHandler(userID int, topic string, language string) string {
+func subscribeHandler(userID int, topic string, language string) {
   switch topic {
     case "current", "warning":
-        stmtIns, err := db.Prepare(`INSERT INTO subscribe (id, topic)
-          VALUES( ?, ? ) ON DUPLICATE KEY UPDATE topic=VALUES(topic)`)
-        if err != nil {
-          panic(err.Error())
-        }
-        defer stmtIns.Close()
-        _, err = stmtIns.Exec(userID, topic)
-        if err != nil {
-          panic(err.Error())
-        }
-      switch language {
-        case "eng":
-          return "You have subscribed "+ topic
-        case "cht":
-          return "你已訂閱了頻道 "+ topic
-        case "chs":
-          return "你已订阅了频道 "+ topic
+      stmtIns, err := db.Prepare(`INSERT INTO subscribe (id, topic)
+        VALUES( ?, ? ) ON DUPLICATE KEY UPDATE topic=VALUES(topic)`)
+      if err != nil {
+        panic(err.Error())
       }
-    default:
-      switch language {
-        case "eng":
-          return "Please use `topic` to tell me what you want to subscribe"
-        case "cht":
-          return "請使用 `topic` 告訴我你想訂閱的頻道"
-        case "chs":
-          return "请使用 `topic` 告诉我你想订阅的频道"
+      defer stmtIns.Close()
+      _, err = stmtIns.Exec(userID, topic)
+      if err != nil {
+        panic(err.Error())
       }
   }
-  return ""
 }
 
-func unsubscribeHandler(userID int, topic string, language string) string {
+func unsubscribeHandler(userID int, topic string, language string) {
   switch topic {
     case "current", "warning":
-        stmtIns, err := db.Prepare(`DELETE FROM subscribe WHERE id=? AND topic=?`)
-        if err != nil {
-          panic(err.Error())
-        }
-        defer stmtIns.Close()
-        _, err = stmtIns.Exec(userID, topic)
-        if err != nil {
-          panic(err.Error())
-        }
-      switch language {
-        case "eng":
-          return "You have unsubscribed "+ topic
-        case "cht":
-          return "你已取消訂閱頻道 "+ topic
-        case "chs":
-          return "你已取消订阅频道 "+ topic
+      stmtIns, err := db.Prepare(`DELETE FROM subscribe WHERE id=? AND topic=?`)
+      if err != nil {
+        panic(err.Error())
       }
-    default:
-      switch language {
-        case "eng":
-          return "Please use `topic` to tell me what you want to subscribe"
-        case "cht":
-          return "請使用 `topic` 告訴我你想取消訂閱的頻道"
-        case "chs":
-          return "请使用 `topic` 告诉我你想取消订阅的频道"
+      defer stmtIns.Close()
+      _, err = stmtIns.Exec(userID, topic)
+      if err != nil {
+        panic(err.Error())
       }
   }
-  return ""
 }
 
 func notifyUsers(topic string, language string, content string){
@@ -257,7 +221,7 @@ func listenFeed(topic string, language string, updateInterval int) {
   for {
     _, content := fetchTopic(topic, language)
     if(content != temp){
-      log.Printf("changed prev: %s now: %s", temp, content)
+      //log.Printf("changed prev: %s now: %s", temp, content)
       notifyUsers(topic, language, content)
       temp = content
     }
@@ -291,7 +255,7 @@ func main() {
     log.Fatal(err)
   }
 
-  bot.Debug = true
+  //bot.Debug = true
 
   log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -326,6 +290,7 @@ func main() {
 
 
     switch {
+
       case args[0] == "topics":
         switch language {
           case "eng":
@@ -335,6 +300,7 @@ func main() {
           case "chs":
             responseText = "支援的资讯频道: *current*, *warning*"
         }
+
       case args[0] == "tellme" && len(args) <= 1:
         switch language {
           case "eng":
@@ -344,12 +310,52 @@ func main() {
           case "chs":
             responseText = "请使用 `topic` 告诉我你想知道的资讯"
         }
+
       case args[0] == "tellme":
         responseText = tellmeHandler(args[1], language)
+
+      case args[0] == "subscribe" && len(args) <= 1 :
+        switch language {
+          case "eng":
+            responseText = "Please use `topic` to tell me what you want to subscribe"
+          case "cht":
+            responseText = "請使用 `topic` 告訴我你想訂閱的頻道"
+          case "chs":
+            responseText = "请使用 `topic` 告诉我你想订阅的频道"
+        }
+
       case args[0] == "subscribe":
-        responseText = subscribeHandler(update.Message.From.ID, args[1], language)
+        subscribeHandler(update.Message.From.ID, args[1], language)
+        switch language {
+          case "eng":
+            responseText = "You have subscribed "+ args[1]
+          case "cht":
+            responseText = "你已訂閱了頻道 "+ args[1]
+          case "chs":
+            responseText = "你已订阅了频道 "+ args[1]
+        }
+
+      case args[0] == "unsubscribe" && len(args) <= 1:
+        switch language {
+          case "eng":
+            responseText = "Please use `topic` to tell me what you want to subscribe"
+          case "cht":
+            responseText = "請使用 `topic` 告訴我你想取消訂閱的頻道"
+          case "chs":
+            responseText = "请使用 `topic` 告诉我你想取消订阅的频道"
+        }
+
       case args[0] == "unsubscribe":
-        responseText = unsubscribeHandler(update.Message.From.ID, args[1], language)
+        unsubscribeHandler(update.Message.From.ID, args[1], language)
+        switch language {
+          case "eng":
+            responseText = "You have unsubscribed "+ args[1]
+          case "cht":
+            responseText = "你已取消訂閱頻道 "+ args[1]
+          case "chs":
+            responseText = "你已取消订阅频道 "+ args[1]
+        }
+
       case args[0] == "English":
         language = "eng"
         setUILanguage(update.Message.From.ID, language)
@@ -362,6 +368,7 @@ func main() {
         language = "chs"
         setUILanguage(update.Message.From.ID, language)
         responseText = "语言设定为简体中文"
+
       default:
         switch language {
           case "eng":
