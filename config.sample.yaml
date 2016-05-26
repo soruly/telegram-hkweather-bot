@@ -3,3 +3,4 @@ webhookurl: https://your.base.url.here
 webhookpath: /RelativeURLPath
 listen: 0.0.0.0:8070
 sqlconfig: telegram:telegram@/telegram
+updateinterval: 300

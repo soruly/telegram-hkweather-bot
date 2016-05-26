@@ -2,17 +2,17 @@ package main
 
 import (
   "strings"
-  "gopkg.in/telegram-bot-api.v4"
   "log"
   "time"
   "net/http"
   "regexp"
-  "github.com/ungerik/go-rss"
-  "gopkg.in/yaml.v2"
   "io/ioutil"
   "database/sql"
   "fmt"
   "strconv"
+  "gopkg.in/yaml.v2"
+  "gopkg.in/telegram-bot-api.v4"
+  "github.com/ungerik/go-rss"
   _ "github.com/go-sql-driver/mysql"
 )
 
@@ -22,6 +22,7 @@ type Config struct {
     WebHookURL string
     Listen string
     SQLConfig string
+    UpdateInterval int
 }
 
 func fetchTopic(topic string, language string) (string, string) {
@@ -249,7 +250,7 @@ func getUILanguage(userID int) string {
   return content
 }
 
-func listenFeed(topic string, language string) {
+func listenFeed(topic string, language string, updateInterval int) {
   //load the previous feed from database in case server restarted
   temp := getTopic(topic, language)
   
@@ -260,7 +261,7 @@ func listenFeed(topic string, language string) {
       notifyUsers(topic, language, content)
       temp = content
     }
-    time.Sleep(300 * time.Second)
+    time.Sleep(time.Duration(updateInterval) * time.Second)
   }
 }
 
@@ -299,12 +300,12 @@ func main() {
     log.Fatal(err)
   }
 
-  go listenFeed("current", "eng")
-  go listenFeed("current", "cht")
-  go listenFeed("current", "chs")
-  go listenFeed("warning", "eng")
-  go listenFeed("warning", "cht")
-  go listenFeed("warning", "chs")
+  go listenFeed("current", "eng", config.UpdateInterval)
+  go listenFeed("current", "cht", config.UpdateInterval)
+  go listenFeed("current", "chs", config.UpdateInterval)
+  go listenFeed("warning", "eng", config.UpdateInterval)
+  go listenFeed("warning", "cht", config.UpdateInterval)
+  go listenFeed("warning", "chs", config.UpdateInterval)
 
   updates := bot.ListenForWebhook(config.WebHookPath+"/"+config.BotToken)
   go http.ListenAndServe(config.Listen, nil)
